@@ -87,11 +87,13 @@ cmd_ssh() { local ip; ip="$(tagged_ip "${1:-}")"; exec ssh $SSH_OPTS "root@$ip";
 
 cmd_smoke() {
   local ip; ip="$(tagged_ip "${1:-}")"
-  sync_tree "$ip"
+  # Copy ONLY the test script. Never re-run sync_tree here: its rsync --delete removes files the bootstrap
+  # created on the droplet (data/assets/ssl, the slim data/conf files), which broke Postfix TLS.
+  scp $SSH_OPTS "$(dirname "$0")/../../helper-scripts/dev_tests/smoke.py" "root@$ip:/opt/mailwon/helper-scripts/dev_tests/smoke.py"
   # API key was created by bootstrap in /root/.mailwon-api-key (never printed here).
   ssh $SSH_OPTS "root@$ip" 'cd /opt/mailwon && [ -s /root/.mailwon-api-key ] || { echo "no API key at /root/.mailwon-api-key (bootstrap could not create one; create in admin UI)"; exit 1; }
     MAILCOW_API_KEY="$(cat /root/.mailwon-api-key)" MAILCOW_URL=https://127.0.0.1 MAILCOW_HOSTNAME=mail.mailwon-test.invalid \
-    SMOKE_SKIP="${SMOKE_SKIP:-dkim,rspamd,smtp25}" python3 -I helper-scripts/dev_tests/smoke.py'
+    SMOKE_SKIP="${SMOKE_SKIP:-}" python3 -I helper-scripts/dev_tests/smoke.py'
 }
 
 cmd_destroy() {

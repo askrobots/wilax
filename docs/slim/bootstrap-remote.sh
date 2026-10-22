@@ -3,6 +3,9 @@
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 APP=/opt/mailwon
+# rsync from the Mac keeps the Mac user's uid; git (needed by generate_config.sh) refuses a repo owned by someone else
+chown -R root:root "$APP"
+git config --global --add safe.directory "$APP" 2>/dev/null || true
 cd "$APP"
 
 echo "== packages"
@@ -94,6 +97,11 @@ setconf SQL_PORT 127.0.0.1:13306
 setconf REDIS_PORT 127.0.0.1:7654
 chmod 600 mailcow.conf
 
+# Postfix/Dovecot/nginx need a certificate at start. generate_config.sh makes one, but make sure (the repo ships
+# a snake-oil pair in data/assets/ssl-example). A real host should use acme (SKIP_LETS_ENCRYPT=n) instead.
+mkdir -p data/assets/ssl
+[ -s data/assets/ssl/cert.pem ] || cp -n data/assets/ssl-example/*.pem data/assets/ssl/
+
 echo "== slim config files (new files only; rspamd antivirus.conf is required because clamd is removed)"
 patch -p1 -N --forward < docs/slim/slim-final/slim-config.patch || echo "patch: already applied, or failed: check data/conf/rspamd/override.d/antivirus.conf exists"
 
@@ -113,7 +121,7 @@ done
 
 echo "== API key for smoke test (best effort, stored at /root/.mailwon-api-key)"
 if [ ! -s /root/.mailwon-api-key ]; then
-  KEY="$(LC_ALL=C tr -dc 'A-F0-9' </dev/urandom | head -c 30 | sed 's/\(......\)/\1-/g;s/-$//')"
+  KEY="$(openssl rand -hex 16)"  # not tr|head: head closes the pipe, tr gets SIGPIPE, and pipefail+set -e kills the script
   if $DC exec -T mysql-mailcow sh -c 'mariadb -uroot -p"$MYSQL_ROOT_PASSWORD" mailcow' >/dev/null 2>&1 <<SQL
 INSERT INTO api (api_key, allow_from, skip_ip_check, access, active) VALUES ('$KEY', '127.0.0.1,172.22.1.0/24', 1, 'rw', 1);
 SQL
