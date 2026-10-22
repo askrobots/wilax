@@ -1,0 +1,94 @@
+# mailwon "slim" override -- config-only profile for a 1GB / 1 vCPU droplet.
+# Use:  docker compose -f docker-compose.yml -f docker-compose.slim.override.yml up -d
+# (Never executed/validated against a live stack by the author. All numbers are estimates.)
+#
+# REQUIRED mailcow.conf values (these, not this file, disable services):
+#   SKIP_CLAMD=y          # ClamAV alone is ~1-1.5GB resident; impossible on 1GB
+#   SKIP_OLEFY=y          # olefy only feeds oletools/macro scan; useless w/o clamd workflow
+#   SKIP_SOGO=y           # SOGo (20 workers) is the biggest remaining consumer; container just sleeps
+#   SKIP_FTS=y            # Dovecot Flatcurve full-text search (generate_config.sh writes n; set y)
+#   USE_WATCHDOG=n        # optional; saves ~50-100MB but removes health alerts + auto-heal
+#   SKIP_LETS_ENCRYPT=n   # keep n unless you bring your own certs
+#   FTS_PROCS=1 FTS_HEAP=128   # only matters if you re-enable FTS
+#   LOG_LINES=1000        # smaller redis-backed log lists (default 9999)
+#   ENABLE_IPV6=false     # optional, simpler network
+#   SQL_PORT=127.0.0.1:13306  REDIS_PORT=127.0.0.1:7654   # keep loopback-only
+# Also add swap on the host (2GB, vm.swappiness=10) -- see docs/slim/PLAN.md.
+#
+# Settings that live in bind-mounted files and CANNOT be set from this override
+# (edit the files; see PLAN.md): data/conf/phpfpm/php-fpm.d/pools.conf,
+# data/conf/phpfpm/php-conf.d/opcache-recommended.ini, data/conf/dovecot/dovecot.conf,
+# data/conf/sogo/sogo.conf (only if SOGo is re-enabled), data/conf/redis/redis-conf.sh.
+#
+# mem_limit is a hard cgroup cap: exceeding it OOM-kills the container (restart: always
+# will restart it). Limits are deliberately loose; tighten only after measuring `docker stats`.
+
+services:
+  unbound-mailcow:
+    mem_limit: 64m
+
+  mysql-mailcow:
+    mem_limit: 256m
+    # Appended args override my.cnf. Mailcow ships innodb_buffer_pool_size=24M already;
+    # these trim connection-related allocations further.
+    command:
+      - --innodb-buffer-pool-size=32M
+      - --innodb-log-buffer-size=4M
+      - --max-connections=60
+      - --max-heap-table-size=16M
+      - --tmp-table-size=16M
+      - --sort-buffer-size=512K
+      - --thread-cache-size=4
+      - --table-open-cache=200
+      - --performance-schema=0
+
+  redis-mailcow:
+    mem_limit: 96m
+
+  clamd-mailcow:
+    # With SKIP_CLAMD=y the container only sleeps; cap anyway in case someone flips the flag.
+    mem_limit: 64m
+
+  rspamd-mailcow:
+    mem_limit: 300m
+
+  php-fpm-mailcow:
+    mem_limit: 256m
+    command: "php-fpm -d date.timezone=${TZ} -d expose_php=0 -d opcache.memory_consumption=48 -d opcache.interned_strings_buffer=8"
+
+  sogo-mailcow:
+    mem_limit: 64m    # sleeping stub when SKIP_SOGO=y; raise to >=500m if you re-enable SOGo
+
+  dovecot-mailcow:
+    mem_limit: 256m
+
+  postfix-mailcow:
+    mem_limit: 128m
+
+  postfix-tlspol-mailcow:
+    mem_limit: 48m
+
+  memcached-mailcow:
+    mem_limit: 32m
+    command: ["memcached", "-m", "16"]
+
+  nginx-mailcow:
+    mem_limit: 64m
+
+  acme-mailcow:
+    mem_limit: 96m
+
+  netfilter-mailcow:
+    mem_limit: 96m
+
+  watchdog-mailcow:
+    mem_limit: 128m
+
+  dockerapi-mailcow:
+    mem_limit: 96m
+
+  olefy-mailcow:
+    mem_limit: 48m
+
+  ofelia-mailcow:
+    mem_limit: 32m
