@@ -1,6 +1,7 @@
 # mailwon "slim" override -- config-only profile for a 1GB / 1 vCPU droplet.
 # Use:  docker compose -f docker-compose.yml -f docker-compose.slim.override.yml up -d
-# (Never executed/validated against a live stack by the author. All numbers are estimates.)
+# Validated on a 1GB/1vCPU droplet (see docs/slim/results.md). Requires Docker Compose >= 2.24
+# (uses `profiles` + `depends_on: !override`). Removed services = profile "removed" (never started).
 #
 # REQUIRED mailcow.conf values (these, not this file, disable services):
 #   SKIP_CLAMD=y          # ClamAV alone is ~1-1.5GB resident; impossible on 1GB
@@ -20,8 +21,12 @@
 # data/conf/phpfpm/php-conf.d/opcache-recommended.ini, data/conf/dovecot/dovecot.conf,
 # data/conf/sogo/sogo.conf (only if SOGo is re-enabled), data/conf/redis/redis-conf.sh.
 #
-# mem_limit is a hard cgroup cap: exceeding it OOM-kills the container (restart: always
-# will restart it). Limits are deliberately loose; tighten only after measuring `docker stats`.
+# mem_limit WITHOUT memswap_limit only caps RAM: the container swaps first, and is OOM-killed only when
+# RAM+swap hit the cap (memswap default = 2x). ofelia was OOM-killed at 32m in testing; 96m is the floor.
+#
+# Extra files needed (copy from docs/slim/conf/ -> data/conf/, see docs/slim/slim-final/REPRODUCE.md):
+#   pools.slim.conf, redis-slim.sh, rspamd override.d/antivirus.conf (clamd is gone), neural.conf,
+#   worker-proxy.custom.inc, mysql/slim.cnf, dovecot/extra.conf, postfix/extra.cf (tlspol line enabled).
 
 services:
   unbound-mailcow:
@@ -29,6 +34,7 @@ services:
 
   mysql-mailcow:
     mem_limit: 256m
+    depends_on: !override [unbound-mailcow]
     # Appended args override my.cnf. Mailcow ships innodb_buffer_pool_size=24M already;
     # these trim connection-related allocations further.
     command:
@@ -43,52 +49,69 @@ services:
       - --performance-schema=0
 
   redis-mailcow:
-    mem_limit: 96m
+    mem_limit: 128m
+    depends_on: !override []
+    volumes:
+      - ./data/conf/redis/redis-slim.sh:/redis-conf.sh:z
 
   clamd-mailcow:
+    profiles: [\"removed\"]
     # With SKIP_CLAMD=y the container only sleeps; cap anyway in case someone flips the flag.
     mem_limit: 64m
 
   rspamd-mailcow:
     mem_limit: 300m
+    depends_on: !override [dovecot-mailcow]
 
   php-fpm-mailcow:
     mem_limit: 256m
+    volumes:
+      - ./data/conf/phpfpm/php-fpm.d/pools.slim.conf:/usr/local/etc/php-fpm.d/z-pools.conf:Z
     command: "php-fpm -d date.timezone=${TZ} -d expose_php=0 -d opcache.memory_consumption=48 -d opcache.interned_strings_buffer=8"
 
   sogo-mailcow:
+    profiles: [\"removed\"]
     mem_limit: 64m    # sleeping stub when SKIP_SOGO=y; raise to >=500m if you re-enable SOGo
 
   dovecot-mailcow:
     mem_limit: 256m
+    depends_on: !override [mysql-mailcow, redis-mailcow]
 
   postfix-mailcow:
     mem_limit: 128m
+    depends_on: !override [mysql-mailcow, unbound-mailcow]
 
   postfix-tlspol-mailcow:
+    profiles: [\"removed\"]
     mem_limit: 48m
 
   memcached-mailcow:
+    profiles: [\"removed\"]
     mem_limit: 32m
     command: ["memcached", "-m", "16"]
 
   nginx-mailcow:
     mem_limit: 64m
+    depends_on: !override [php-fpm-mailcow, redis-mailcow, rspamd-mailcow]
 
   acme-mailcow:
     mem_limit: 96m
 
   netfilter-mailcow:
+    profiles: [\"removed\"]
     mem_limit: 96m
 
   watchdog-mailcow:
+    profiles: [\"removed\"]
     mem_limit: 128m
 
   dockerapi-mailcow:
     mem_limit: 96m
 
   olefy-mailcow:
+    profiles: [\"removed\"]
     mem_limit: 48m
 
   ofelia-mailcow:
-    mem_limit: 32m
+    mem_limit: 96m
+    depends_on: !override [dovecot-mailcow]

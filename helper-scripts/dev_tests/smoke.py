@@ -168,11 +168,15 @@ def main():
     def s_dkim():
         if "dkim" in skip:
             raise Skip("dkim disabled (SMOKE_SKIP)")
+        # mailcow auto-creates a key when a domain is added; only add one if missing
+        cur = api.call("GET", f"/api/v1/get/dkim/{a.domain}")
+        if isinstance(cur, dict) and cur.get("pubkey"):
+            return "key present (auto-created)"
         api.post_ok("/api/v1/add/dkim", {
             "domains": a.domain, "dkim_selector": "dkim", "key_size": "2048"})
         return "key generated"
     if created_domain:
-        step("api: generate dkim key")(s_dkim)
+        step("api: dkim key")(s_dkim)
 
     m_sub, m_25 = secrets.token_hex(6), secrets.token_hex(6)
 

@@ -1,0 +1,122 @@
+--- /dev/null
++++ b/data/conf/mysql/slim.cnf
+@@ -0,0 +1,14 @@
++# SLIM: MariaDB overrides. The whole data/conf/mysql/ dir is mounted at /etc/mysql/conf.d (docker-compose.yml:28), and slim.cnf sorts after my.cnf so it wins.
++# New file, no tracked edit. Expected effect: ~30-60MB lower worst-case (connections/tmp tables); idle RSS mostly unchanged (buffer pool already 24M in tracked my.cnf).
++# Duplicates the command: args of docker-compose.slim.override.yml; keep either one.
++[mysqld]
++innodb_buffer_pool_size = 32M
++innodb_log_buffer_size  = 4M
++max-connections         = 60
++max_heap_table_size     = 16M
++tmp_table_size          = 16M
++sort_buffer_size        = 512K
++thread_cache_size       = 4
++table_open_cache        = 200
++aria_pagecache_buffer_size = 8M
++# RISK: 60 connections must cover php system-worker(15)+web-worker(50) defaults; with pools.slim.conf (max 6+6) it is ample.
+--- /dev/null
++++ b/data/conf/dovecot/extra.conf
+@@ -0,0 +1,19 @@
++# SLIM: dovecot overrides. Included by tracked dovecot.conf line 306 (!include_try /etc/dovecot/extra.conf); file is gitignored (.gitignore:15), so no merge conflicts.
++# Service blocks here merge with those in dovecot.conf (later wins). Global default_* settings do NOT work here: dovecot.conf sets default_client_limit/default_vsz_limit at lines 310-311, AFTER this include.
++# Expected effect: fewer pre-forked login processes (~5-10MB saved each) and capped IMAP session fan-out. Total saving est. 10-40MB. Not runtime-verified.
++service imap-login {
++  process_min_avail = 1
++  process_limit = 100
++}
++service managesieve-login {
++  process_min_avail = 0
++}
++service pop3-login {
++  process_min_avail = 0
++}
++service imap {
++  process_limit = 200
++}
++auth_cache_size = 2M
++mail_max_userip_connections = 50
++# RISK: managesieve/pop3 first connection is slower (process spawn). mail_max_userip_connections=50 would reject a client opening >50 IMAP connections for one user from one IP (tracked value 500, dovecot.conf:271).
+--- /dev/null
++++ b/data/conf/phpfpm/php-fpm.d/pools.slim.conf
+@@ -0,0 +1,27 @@
++; SLIM: derived from tracked data/conf/phpfpm/php-fpm.d/pools.conf (regenerate with the awk in APPLY.md after upstream merges). Mount over /usr/local/etc/php-fpm.d/z-pools.conf.
++; Effect: ondemand workers cost 0 RSS idle; caps 6+6 children (tracked: 15+50). Est. saving 60-150MB. RISK: first request after idle pays spawn latency; >6 concurrent API/IMAP-auth requests queue.
++[system-worker]
++user = www-data
++group = www-data
++pm = ondemand
++pm.max_children = 6
++pm.process_idle_timeout = 15s
++listen = [::]:9001
++access.log = /proc/self/fd/2
++clear_env = no
++catch_workers_output = yes
++php_admin_value[memory_limit] = 256M
++php_admin_value[disable_functions] = show_source, highlight_file, apache_child_terminate, apache_get_modules, apache_note, apache_setenv, virtual, dl, disk_total_space, posix_getpwnam, posix_getpwuid, posix_mkfifo, posix_mknod, posix_setpgid, posix_setsid, posix_setuid, posix_uname, proc_nice, openlog, syslog, pfsockopen, system, shell_exec, passthru, popen, proc_open, exec, ini_alter, pcntl_exec, proc_close, proc_get_status, proc_terminate, symlink
++
++[web-worker]
++user = www-data
++group = www-data
++pm = ondemand
++pm.max_children = 6
++pm.process_idle_timeout = 15s
++listen = [::]:9002
++access.log = /proc/self/fd/2
++clear_env = no
++catch_workers_output = yes
++php_admin_value[memory_limit] = 512M
++php_admin_value[disable_functions] = show_source, highlight_file, apache_child_terminate, apache_get_modules, apache_note, apache_setenv, virtual, dl, disk_total_space, posix_getpwnam, posix_getpwuid, posix_mkfifo, posix_mknod, posix_setpgid, posix_setsid, posix_setuid, posix_uname, proc_nice, openlog, syslog, pfsockopen, system, shell_exec, passthru, popen, proc_open, exec, ini_alter, pcntl_exec, proc_close, proc_get_status, proc_terminate, symlink
+--- /dev/null
++++ b/data/conf/redis/redis-slim.sh
+@@ -0,0 +1,17 @@
++#!/bin/sh
++# SLIM: replacement for tracked data/conf/redis/redis-conf.sh (same content + maxmemory). Mount over it from the compose override:
++#   redis-mailcow: volumes: - ./data/conf/redis/redis-slim.sh:/redis-conf.sh:z   (same target path replaces the base mount)
++# Expected effect: bounds redis RSS at 96MB (+fork overhead). volatile-lru only evicts keys WITH a TTL; keys without TTL (e.g. rspamd history/bayes) are never evicted, so writes may error at the cap (acts like noeviction for them).
++# RISK: if redis hits the cap with only non-TTL data, rspamd/PHP writes fail. Monitor `redis-cli info memory`. Not runtime-verified.
++cat <<EOC > /redis.conf
++requirepass $REDISPASS
++user quota_notify on nopass ~QW_* -@all +get +hget +ping
++maxmemory 96mb
++maxmemory-policy volatile-lru
++EOC
++
++if [ -n "$REDISMASTERPASS" ]; then
++  echo "masterauth $REDISMASTERPASS" >> /redis.conf
++fi
++
++exec redis-server /redis.conf
+--- /dev/null
++++ b/data/conf/rspamd/override.d/antivirus.conf
+@@ -0,0 +1,5 @@
++# SLIM: ONLY install this when clamd-mailcow is ABSENT (not merely a sleeping stub).
++# Tracked data/conf/rspamd/local.d/antivirus.conf points at "clamd:3310"; with the container gone the name does not resolve and rspamd logs errors per scan.
++# override.d replaces the module section, so enabled=false wins over the local.d servers line (stock rspamd precedence; not runtime-verified).
++# Expected effect: no per-message scan attempt/timeouts. Risk: no AV at all (intended).
++enabled = false;
+--- /dev/null
++++ b/data/conf/rspamd/override.d/neural.conf
+@@ -0,0 +1,4 @@
++# SLIM: disable rspamd neural module (needs redis + torch-like training state; no benefit for a small relay-style setup).
++# Expected effect: a few MB RSS and less redis churn. Safe: override.d/<module>.conf with enabled=false is the stock rspamd mechanism.
++# Risk: none for mailcow features (no mailcow UI references neural). Not runtime-verified.
++enabled = false;
+--- /dev/null
++++ b/data/conf/rspamd/override.d/worker-proxy.custom.inc
+@@ -0,0 +1,4 @@
++# SLIM: included by tracked override.d/worker-proxy.inc (priority=30 .include try=true, line "worker-proxy.custom.inc").
++# Pin the milter/proxy worker to one process. Expected: saves ~20-40MB per extra worker if rspamd would otherwise default to >1 (rspamd default for proxy count NOT verified in this repo).
++# Risk: one proxy process serializes milter sessions on 1 vCPU, which is fine at this scale.
++count = 1;
+--- /dev/null
++++ b/data/conf/postfix/extra.cf
+@@ -0,0 +1,8 @@
++# SLIM: appended to main.cf by data/Dockerfiles/postfix/postfix.sh:488-491; gitignored (.gitignore:37). Later duplicate parameters win (postfix warns).
++# Expected effect: caps concurrent smtpd/smtp/cleanup processes (each ~3-8MB). Est. saving 10-30MB under bursts, ~0 at idle.
++default_process_limit = 20
++smtpd_client_connection_count_limit = 20
++# OPTIONAL (only if postfix-tlspol-mailcow is removed): drop the tlspol socketmap from the policy maps.
++# Tracked main.cf:153 is:  smtp_tls_policy_maps = proxy:mysql:/opt/postfix/conf/sql/mysql_tls_policy_override_maps.cf socketmap:inet:postfix-tlspol:8642:QUERYwithTLSRPT
++# Uncomment the next line ONLY with tlspol removed. Risk: loses MTA-STS/DANE enforcement for outbound mail (opportunistic TLS only). Not runtime-verified.
++smtp_tls_policy_maps = proxy:mysql:/opt/postfix/conf/sql/mysql_tls_policy_override_maps.cf

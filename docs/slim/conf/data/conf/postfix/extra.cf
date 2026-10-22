@@ -1,0 +1,8 @@
+# SLIM: appended to main.cf by data/Dockerfiles/postfix/postfix.sh:488-491; gitignored (.gitignore:37). Later duplicate parameters win (postfix warns).
+# Expected effect: caps concurrent smtpd/smtp/cleanup processes (each ~3-8MB). Est. saving 10-30MB under bursts, ~0 at idle.
+default_process_limit = 20
+smtpd_client_connection_count_limit = 20
+# OPTIONAL (only if postfix-tlspol-mailcow is removed): drop the tlspol socketmap from the policy maps.
+# Tracked main.cf:153 is:  smtp_tls_policy_maps = proxy:mysql:/opt/postfix/conf/sql/mysql_tls_policy_override_maps.cf socketmap:inet:postfix-tlspol:8642:QUERYwithTLSRPT
+# Uncomment the next line ONLY with tlspol removed. Risk: loses MTA-STS/DANE enforcement for outbound mail (opportunistic TLS only). Not runtime-verified.
+#smtp_tls_policy_maps = proxy:mysql:/opt/postfix/conf/sql/mysql_tls_policy_override_maps.cf

@@ -1,0 +1,14 @@
+# SLIM: MariaDB overrides. The whole data/conf/mysql/ dir is mounted at /etc/mysql/conf.d (docker-compose.yml:28), and slim.cnf sorts after my.cnf so it wins.
+# New file, no tracked edit. Expected effect: ~30-60MB lower worst-case (connections/tmp tables); idle RSS mostly unchanged (buffer pool already 24M in tracked my.cnf).
+# Duplicates the command: args of docker-compose.slim.override.yml; keep either one.
+[mysqld]
+innodb_buffer_pool_size = 32M
+innodb_log_buffer_size  = 4M
+max-connections         = 60
+max_heap_table_size     = 16M
+tmp_table_size          = 16M
+sort_buffer_size        = 512K
+thread_cache_size       = 4
+table_open_cache        = 200
+aria_pagecache_buffer_size = 8M
+# RISK: 60 connections must cover php system-worker(15)+web-worker(50) defaults; with pools.slim.conf (max 6+6) it is ample.

@@ -36,9 +36,20 @@ def tracked(*suffixes, exclude=('/vendor/', '/node_modules/')):
     ]
 
 
+class _Loader(yaml.SafeLoader):
+    """SafeLoader that tolerates compose merge tags (!override, !reset)."""
+
+
+for _tag in ('!override', '!reset'):
+    _Loader.add_multi_constructor(_tag, lambda l, suf, node: (
+        l.construct_sequence(node) if isinstance(node, yaml.SequenceNode)
+        else l.construct_mapping(node) if isinstance(node, yaml.MappingNode)
+        else l.construct_scalar(node)))
+
+
 def load(path):
     with open(path) as fh:
-        return yaml.safe_load(fh)
+        return yaml.load(fh, Loader=_Loader)
 
 
 def mem_bytes(value):

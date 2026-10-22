@@ -1,0 +1,11 @@
+# lines changed in mailcow.conf vs a generated stock file (no secrets)
+HTTP_BIND=127.0.0.1
+HTTPS_BIND=127.0.0.1
+SQL_PORT=127.0.0.1:13306
+REDIS_PORT=127.0.0.1:7654
+SKIP_LETS_ENCRYPT=y     # test droplet only (no DNS); keep n on a real host (acme generates the first cert)
+SKIP_CLAMD=y
+SKIP_OLEFY=y
+SKIP_SOGO=y
+SKIP_FTS=y
+USE_WATCHDOG=n
