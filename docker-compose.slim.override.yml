@@ -1,4 +1,4 @@
-# mailwon "slim" override -- config-only profile for a 1GB / 1 vCPU droplet.
+# wilax "slim" override -- config-only profile for a 1GB / 1 vCPU droplet.
 # Use:  docker compose -f docker-compose.yml -f docker-compose.slim.override.yml up -d
 # Validated on a 1GB/1vCPU droplet (see docs/slim/results.md). Requires Docker Compose >= 2.24
 # (uses `profiles` + `depends_on: !override`). Removed services = profile "removed" (never started).

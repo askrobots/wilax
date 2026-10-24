@@ -1,4 +1,4 @@
-# mailwon slim plan: mailcow on a 1GB / 1 vCPU droplet
+# wilax slim plan: mailcow on a 1GB / 1 vCPU droplet
 
 Status: analysis from reading the repo (docker-compose.yml, generate_config.sh, data/Dockerfiles, data/conf, data/web). Nothing was run. **All RAM numbers are estimates from general knowledge of these programs and the shipped config, not measurements.** Measure with `docker stats --no-stream` and `free -m` before trusting any of it.
 

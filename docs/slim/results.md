@@ -1,4 +1,4 @@
-# mailwon slim: measured results (droplet mailwon-test, 1GB/1vCPU, 2GB swap, Compose v5.6.1)
+# wilax slim: measured results (droplet wilax-test, 1GB/1vCPU, 2GB swap, Compose v5.6.1)
 
 All numbers measured 2026-10-22 on the droplet, localhost only. "Settled" = 1.5-3 min after the change; one-shot samples, not averages (noise ~ +/-30MB). `free -m` MiB. Per-container = cgroup memory.current + memory.swap.current. Repro: docs/slim/slim-final/.
 

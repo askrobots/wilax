@@ -4,8 +4,8 @@
 # 0. host: 2GB swap + swappiness 10
 fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
 sysctl -w vm.swappiness=10 && echo vm.swappiness=10 >> /etc/sysctl.d/99-slim.conf
-# 1. stock tree + mailcow.conf (answers: hostname mail.mailwon-test.invalid, TZ)
-cd /opt/mailwon && ./generate_config.sh
+# 1. stock tree + mailcow.conf (answers: hostname mail.wilax-test.invalid, TZ)
+cd /opt/wilax && ./generate_config.sh
 #    then apply the lines in mailcow.conf.changes (sed -i per key)
 # 2. conf files (new files only; see slim-config.patch)
 patch -p1 < docs/slim/slim-final/slim-config.patch

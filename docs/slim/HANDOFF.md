@@ -1,10 +1,10 @@
-# mailwon handoff (for a fresh Claude Code session)
+# wilax handoff (for a fresh Claude Code session)
 
 ## What and why
-mailwon is a fork of mailcow-dockerized aiming at a Mailcow-compatible stack that runs on a 1GB RAM / 1 vCPU, $7/month DigitalOcean droplet. askrobots.com hosts email for users: the q9 app (`~/IdeaProjects/q9`) drives Mailcow through its API (`email_hosting/mailcow_client.py`, class `MailcowClient`) and mirrors mail into Django via IMAP polling. Stock Mailcow needs swap on 1GB and is slow.
+wilax is a fork of mailcow-dockerized aiming at a Mailcow-compatible stack that runs on a 1GB RAM / 1 vCPU, $7/month DigitalOcean droplet. askrobots.com hosts email for users: the q9 app (`~/IdeaProjects/q9`) drives Mailcow through its API (`email_hosting/mailcow_client.py`, class `MailcowClient`) and mirrors mail into Django via IMAP polling. Stock Mailcow needs swap on 1GB and is slow.
 
 ## State of the fork
-- Repo: `/Volumes/T9/mailcow` (git). Local commits are NOT pushed to github.com/askrobots/mailwon. The `upstream` remote (mailcow) is kept. Check `git status`/`git log` first; do not assume anything is pushed.
+- Repo: `/Volumes/T9/mailcow` (git). Local commits are NOT pushed to github.com/askrobots/wilax. The `upstream` remote (mailcow) is kept. Check `git status`/`git log` first; do not assume anything is pushed.
 
 ## File map
 - `docs/slim/PLAN.md`: component-by-component RAM analysis and slimming plan.
@@ -17,11 +17,11 @@ mailwon is a fork of mailcow-dockerized aiming at a Mailcow-compatible stack tha
 
 ## Test droplet (bills hourly, about $0.0104/hr)
 ```
-docs/slim/provision-droplet.sh create [name]   # default mailwon-test2; nyc1, s-1vcpu-1gb-amd, ubuntu 24.04, ssh key 38944259, tag mailwon-test
+docs/slim/provision-droplet.sh create [name]   # default wilax-test2; nyc1, s-1vcpu-1gb-amd, ubuntu 24.04, ssh key 38944259, tag wilax-test
 docs/slim/provision-droplet.sh status | ssh | smoke
-docs/slim/provision-droplet.sh destroy [--yes] # deletes only droplets tagged mailwon-test, then lists the rest
+docs/slim/provision-droplet.sh destroy [--yes] # deletes only droplets tagged wilax-test, then lists the rest
 ```
-Cleanup rule: destroy the droplet at the end of EVERY session. Never touch droplets `ubuntu-s-1vcpu-1gb-amd-nyc1` and `nc`, or the user's production Mailcow. The older baseline droplet `mailwon-test` (id 611712711) may still exist if not yet deleted; check `doctl compute droplet list`.
+Cleanup rule: destroy the droplet at the end of EVERY session. Never touch droplets `ubuntu-s-1vcpu-1gb-amd-nyc1` and `nc`, or the user's production Mailcow. The older baseline droplet `wilax-test` (id 611712711) may still exist if not yet deleted; check `doctl compute droplet list`.
 
 ## Measured facts so far (stock-ish stack, 1GB + 2GB swap)
 - All 18 containers up ~5 min after `up -d` (pull 2m19s), no OOM kills.
@@ -37,10 +37,10 @@ Cleanup rule: destroy the droplet at the end of EVERY session. Never touch dropl
 
 ## Next steps (priority order)
 1. Apply tuned configs (`docs/slim/conf/`, `slim-final/`, override) on a recreated droplet; measure with `free -m` and run `smoke`.
-2. Replace the engine behind a `MailwonClient` exposing the same ~20 methods as `MailcowClient`, so q9 can switch without other changes.
+2. Replace the engine behind a `WilaxClient` exposing the same ~20 methods as `MailcowClient`, so q9 can switch without other changes.
 3. Direct delivery to the app (e.g. LMTP/pipe/webhook) instead of IMAP polling.
 4. Pilot one throwaway domain end to end.
-5. Push the fork to github.com/askrobots/mailwon (ask the user first).
+5. Push the fork to github.com/askrobots/wilax (ask the user first).
 
 ## Results from this session
 Date: 2026-10-22. Details and raw numbers: `docs/slim/results.md`; reproduce steps: `docs/slim/slim-final/REPRODUCE.md`.
@@ -57,6 +57,6 @@ Date: 2026-10-22. Details and raw numbers: `docs/slim/results.md`; reproduce ste
 
 **Provisioning validated end to end (2026-10-22):** `docs/slim/provision-droplet.sh create` built a fresh droplet from nothing, `bootstrap-remote.sh` brought up the 11-container slim stack, and `provision-droplet.sh smoke` passed 11/11; `destroy --yes` then deleted only the tagged droplet. Fresh stack: 11 containers, 717MB used, 477MB swap, 244MB available, ~8 minutes after create. Running it found and fixed four bugs: (1) git "dubious ownership" because rsync keeps the Mac uid (now `chown -R root:root` + safe.directory); (2) `tr | head` under `pipefail` killed the script with SIGPIPE (API key now `openssl rand -hex 16`); (3) the `smoke` command re-ran `rsync --delete`, which deleted `data/assets/ssl` and the slim `data/conf` files and broke Postfix TLS (now it copies only smoke.py; never re-run sync_tree on a live box); (4) stale `SMOKE_SKIP` defaults. Also added to the bootstrap: loopback bindings, USE_WATCHDOG=n, slim-config.patch, an explicit snake-oil cert step. Known quirk: containers keep a stale bind mount if a host directory is deleted and recreated, so `up -d --force-recreate` them.
 
-**Droplet state:** both test droplets (`mailwon-test` 611712711 and the validation droplet `mailwon-test2` 611727742) were destroyed at the end of this session, as required; `doctl compute droplet list` shows only the user's own `ubuntu-s-1vcpu-1gb-amd-nyc1` and `nc`. Nothing of ours is running.
+**Droplet state:** both test droplets (`wilax-test` 611712711 and the validation droplet `wilax-test2` 611727742) were destroyed at the end of this session, as required; `doctl compute droplet list` shows only the user's own `ubuntu-s-1vcpu-1gb-amd-nyc1` and `nc`. Nothing of ours is running.
 
-**Suggested next steps:** (1) provisioning is validated, so start from `provision-droplet.sh create`; (2) trim rspamd module by module and measure; (3) replace ofelia with host cron and make dockerapi optional (needs a change in data/web/inc/prerequisites.inc.php, which currently returns HTTP 500 for the whole PHP layer without it); (4) decide between a 2GB droplet (about $5 more) and a deeper rewrite; (5) the real goal: a `MailwonClient` with the same ~20 methods as `email_hosting/mailcow_client.py`, then direct delivery to the app instead of IMAP polling; (6) test outbound mail before trusting it with real domains.
+**Suggested next steps:** (1) provisioning is validated, so start from `provision-droplet.sh create`; (2) trim rspamd module by module and measure; (3) replace ofelia with host cron and make dockerapi optional (needs a change in data/web/inc/prerequisites.inc.php, which currently returns HTTP 500 for the whole PHP layer without it); (4) decide between a 2GB droplet (about $5 more) and a deeper rewrite; (5) the real goal: a `WilaxClient` with the same ~20 methods as `email_hosting/mailcow_client.py`, then direct delivery to the app instead of IMAP polling; (6) test outbound mail before trusting it with real domains.

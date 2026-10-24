@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# Recreate / manage the disposable mailwon test droplet from one script.
+# Recreate / manage the disposable wilax test droplet from one script.
 # Runs on the user's Mac. Needs: doctl (authenticated), ssh, rsync.
 #
 # SAFETY: this script only ever creates or deletes droplets carrying the tag
-# "mailwon-test". It NEVER touches the droplets named `ubuntu-s-1vcpu-1gb-amd-nyc1`
+# "wilax-test". It NEVER touches the droplets named `ubuntu-s-1vcpu-1gb-amd-nyc1`
 # or `nc`, nor the production Mailcow, nor any droplet without that tag.
 #
 # Usage: provision-droplet.sh create [name] | status | ssh | smoke | destroy [--yes]
 set -euo pipefail
 
-TAG="mailwon-test"
-DEFAULT_NAME="mailwon-test2"
+TAG="wilax-test"
+DEFAULT_NAME="wilax-test2"
 REGION="nyc1"
 SIZE="s-1vcpu-1gb-amd"
 IMAGE="ubuntu-24-04-x64"
@@ -20,7 +20,7 @@ PROTECTED_NAMES="ubuntu-s-1vcpu-1gb-amd-nyc1 nc"
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$HERE/../.." && pwd)"
-SSH_OPTS="-o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$HOME/.ssh/known_hosts.mailwon -o ConnectTimeout=8 -o LogLevel=ERROR"
+SSH_OPTS="-o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$HOME/.ssh/known_hosts.wilax -o ConnectTimeout=8 -o LogLevel=ERROR"
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 command -v doctl >/dev/null || die "doctl not found"
@@ -59,7 +59,7 @@ cmd_create() {
   done
   sync_tree "$ip"
   echo "Running bootstrap-remote.sh (several minutes: apt, docker, image pull)..."
-  ssh $SSH_OPTS "root@$ip" "bash /opt/mailwon/docs/slim/bootstrap-remote.sh"
+  ssh $SSH_OPTS "root@$ip" "bash /opt/wilax/docs/slim/bootstrap-remote.sh"
   echo
   echo "Droplet $name ready at $ip"
   echo "Cost: about \$$HOURLY/hour (\$7/month). DESTROY IT WHEN DONE: $0 destroy"
@@ -67,11 +67,11 @@ cmd_create() {
 
 sync_tree() {
   local ip="$1"
-  ssh $SSH_OPTS "root@$ip" "mkdir -p /opt/mailwon"
+  ssh $SSH_OPTS "root@$ip" "mkdir -p /opt/wilax"
   rsync -az --delete -e "ssh $SSH_OPTS" \
     --exclude .git --exclude venv --exclude .venv --exclude node_modules \
     --exclude mailcow.conf --exclude .env \
-    "$REPO"/ "root@$ip:/opt/mailwon/"
+    "$REPO"/ "root@$ip:/opt/wilax/"
 }
 
 cmd_status() {
@@ -89,10 +89,10 @@ cmd_smoke() {
   local ip; ip="$(tagged_ip "${1:-}")"
   # Copy ONLY the test script. Never re-run sync_tree here: its rsync --delete removes files the bootstrap
   # created on the droplet (data/assets/ssl, the slim data/conf files), which broke Postfix TLS.
-  scp $SSH_OPTS "$(dirname "$0")/../../helper-scripts/dev_tests/smoke.py" "root@$ip:/opt/mailwon/helper-scripts/dev_tests/smoke.py"
-  # API key was created by bootstrap in /root/.mailwon-api-key (never printed here).
-  ssh $SSH_OPTS "root@$ip" 'cd /opt/mailwon && [ -s /root/.mailwon-api-key ] || { echo "no API key at /root/.mailwon-api-key (bootstrap could not create one; create in admin UI)"; exit 1; }
-    MAILCOW_API_KEY="$(cat /root/.mailwon-api-key)" MAILCOW_URL=https://127.0.0.1 MAILCOW_HOSTNAME=mail.mailwon-test.invalid \
+  scp $SSH_OPTS "$(dirname "$0")/../../helper-scripts/dev_tests/smoke.py" "root@$ip:/opt/wilax/helper-scripts/dev_tests/smoke.py"
+  # API key was created by bootstrap in /root/.wilax-api-key (never printed here).
+  ssh $SSH_OPTS "root@$ip" 'cd /opt/wilax && [ -s /root/.wilax-api-key ] || { echo "no API key at /root/.wilax-api-key (bootstrap could not create one; create in admin UI)"; exit 1; }
+    MAILCOW_API_KEY="$(cat /root/.wilax-api-key)" MAILCOW_URL=https://127.0.0.1 MAILCOW_HOSTNAME=mail.wilax-test.invalid \
     SMOKE_SKIP="${SMOKE_SKIP:-}" python3 -I helper-scripts/dev_tests/smoke.py'
 }
 

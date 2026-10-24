@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Runs as root ON the fresh Ubuntu 24.04 droplet (idempotent). Tree is at /opt/mailwon.
+# Runs as root ON the fresh Ubuntu 24.04 droplet (idempotent). Tree is at /opt/wilax.
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
-APP=/opt/mailwon
+APP=/opt/wilax
 # rsync from the Mac keeps the Mac user's uid; git (needed by generate_config.sh) refuses a repo owned by someone else
 chown -R root:root "$APP"
 git config --global --add safe.directory "$APP" 2>/dev/null || true
@@ -26,15 +26,15 @@ if ! swapon --show=NAME --noheadings | grep -q .; then
   swapon /swapfile
 fi
 grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
-echo 'vm.swappiness=10' > /etc/sysctl.d/99-mailwon.conf
-sysctl -q -p /etc/sysctl.d/99-mailwon.conf
+echo 'vm.swappiness=10' > /etc/sysctl.d/99-wilax.conf
+sysctl -q -p /etc/sysctl.d/99-wilax.conf
 
 echo "== firewall (only SSH from the internet, including Docker-published ports)"
 # ufw alone does NOT stop Docker-published ports: Docker inserts its own DNAT/FORWARD
 # rules that bypass ufw's INPUT chain. The DOCKER-USER chain is evaluated first for
 # forwarded container traffic, so we drop there. Return traffic of outbound connections
 # (e.g. DNS, image pulls from containers) must be allowed via conntrack.
-cat > /usr/local/sbin/mailwon-fw.sh <<'FW'
+cat > /usr/local/sbin/wilax-fw.sh <<'FW'
 #!/usr/bin/env bash
 IF="$(ip -4 route show default | awk '{print $5; exit}')"
 iptables -N DOCKER-USER 2>/dev/null || true
@@ -43,22 +43,22 @@ iptables -A DOCKER-USER -i "$IF" -m conntrack --ctstate ESTABLISHED,RELATED -j R
 iptables -A DOCKER-USER -i "$IF" -j DROP
 iptables -A DOCKER-USER -j RETURN
 FW
-chmod +x /usr/local/sbin/mailwon-fw.sh
-cat > /etc/systemd/system/mailwon-fw.service <<'UNIT'
+chmod +x /usr/local/sbin/wilax-fw.sh
+cat > /etc/systemd/system/wilax-fw.service <<'UNIT'
 [Unit]
-Description=mailwon: drop public traffic to Docker-published ports
+Description=wilax: drop public traffic to Docker-published ports
 After=docker.service network-online.target
 Requires=docker.service
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStart=/usr/local/sbin/mailwon-fw.sh
+ExecStart=/usr/local/sbin/wilax-fw.sh
 [Install]
 WantedBy=multi-user.target
 UNIT
 systemctl daemon-reload
-systemctl enable mailwon-fw.service
-systemctl restart mailwon-fw.service
+systemctl enable wilax-fw.service
+systemctl restart wilax-fw.service
 
 echo "== mailcow.conf"
 ln -sf mailcow.conf .env
@@ -67,21 +67,21 @@ if [ ! -f mailcow.conf ]; then
   # make a throwaway local one backed by a local bare "origin".
   if [ ! -d .git ]; then
     git init -q -b main . 
-    git -c user.email=a@b -c user.name=mailwon add -A >/dev/null 2>&1 || true
-    git -c user.email=a@b -c user.name=mailwon commit -q -m bootstrap --allow-empty
-    rm -rf /var/tmp/mailwon-origin.git; git init -q --bare /var/tmp/mailwon-origin.git
-    git remote add origin /var/tmp/mailwon-origin.git
+    git -c user.email=a@b -c user.name=wilax add -A >/dev/null 2>&1 || true
+    git -c user.email=a@b -c user.name=wilax commit -q -m bootstrap --allow-empty
+    rm -rf /var/tmp/wilax-origin.git; git init -q --bare /var/tmp/wilax-origin.git
+    git remote add origin /var/tmp/wilax-origin.git
     git push -q -u origin main
   fi
   # Env vars accepted by generate_config.sh: MAILCOW_HOSTNAME, MAILCOW_TZ, SKIP_CLAMD
   # (MAILCOW_DBPASS/DBROOT/REDISPASS default to random). Other SKIP_* are set below.
-  MAILCOW_HOSTNAME=mail.mailwon-test.invalid MAILCOW_TZ=UTC SKIP_CLAMD=y \
+  MAILCOW_HOSTNAME=mail.wilax-test.invalid MAILCOW_TZ=UTC SKIP_CLAMD=y \
     ./generate_config.sh --dev </dev/null
 fi
 setconf() { # key value
   if grep -q "^$1=" mailcow.conf; then sed -i "s|^$1=.*|$1=$2|" mailcow.conf; else echo "$1=$2" >> mailcow.conf; fi
 }
-setconf MAILCOW_HOSTNAME mail.mailwon-test.invalid
+setconf MAILCOW_HOSTNAME mail.wilax-test.invalid
 setconf TZ UTC
 setconf SKIP_LETS_ENCRYPT y
 setconf SKIP_CLAMD y
@@ -119,13 +119,13 @@ while :; do
   sleep 10
 done
 
-echo "== API key for smoke test (best effort, stored at /root/.mailwon-api-key)"
-if [ ! -s /root/.mailwon-api-key ]; then
+echo "== API key for smoke test (best effort, stored at /root/.wilax-api-key)"
+if [ ! -s /root/.wilax-api-key ]; then
   KEY="$(openssl rand -hex 16)"  # not tr|head: head closes the pipe, tr gets SIGPIPE, and pipefail+set -e kills the script
   if $DC exec -T mysql-mailcow sh -c 'mariadb -uroot -p"$MYSQL_ROOT_PASSWORD" mailcow' >/dev/null 2>&1 <<SQL
 INSERT INTO api (api_key, allow_from, skip_ip_check, access, active) VALUES ('$KEY', '127.0.0.1,172.22.1.0/24', 1, 'rw', 1);
 SQL
-  then ( umask 077; echo "$KEY" > /root/.mailwon-api-key ); echo "API key written."
+  then ( umask 077; echo "$KEY" > /root/.wilax-api-key ); echo "API key written."
   else echo "WARN: could not insert API key; create one in the admin UI."; fi
 fi
 

@@ -1,4 +1,4 @@
-"""Static checks for mailwon. No Docker, no network, no running stack.
+"""Static checks for wilax. No Docker, no network, no running stack.
 
 Run from the repo root:  python3 -I -m unittest discover -s tests -v
 

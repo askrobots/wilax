@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""mailwon smoke test. Run: python3 -I smoke.py
+"""wilax smoke test. Run: python3 -I smoke.py
 
 Creates a temp domain+mailbox via the API, sends mail over submission (587,
 authenticated, STARTTLS) and over port 25 (unauthenticated), fetches via IMAPS,
@@ -92,7 +92,7 @@ def build_msg(frm, to, marker):
     m["From"], m["To"], m["Subject"] = frm, to, f"smoke {marker}"
     m["Message-ID"] = f"<{marker}@smoke.invalid>"
     m["Date"] = email.utils.formatdate(localtime=False)
-    m.set_content(f"mailwon smoke test {marker}\n")
+    m.set_content(f"wilax smoke test {marker}\n")
     return m
 
 

@@ -12,5 +12,5 @@ for id in $(docker ps -q --no-trunc); do
 done | sort -rn | head -${TOPN:-8}
 echo "containers: $(docker ps -q|wc -l)  oom: $(dmesg | grep -ci 'out of memory')"
 KEY=$(cat /root/apikey 2>/dev/null)
-curl -sk -o /dev/null -H "Host: mail.mailwon-test.invalid" -H "X-API-Key: $KEY" -w "api GET %{http_code} %{time_total}s\n" https://127.0.0.1/api/v1/get/status/containers
-curl -sk -o /dev/null -H "Host: mail.mailwon-test.invalid" -w "login page %{http_code} %{time_total}s\n" https://127.0.0.1/
+curl -sk -o /dev/null -H "Host: mail.wilax-test.invalid" -H "X-API-Key: $KEY" -w "api GET %{http_code} %{time_total}s\n" https://127.0.0.1/api/v1/get/status/containers
+curl -sk -o /dev/null -H "Host: mail.wilax-test.invalid" -w "login page %{http_code} %{time_total}s\n" https://127.0.0.1/
